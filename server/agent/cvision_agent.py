@@ -1,6 +1,5 @@
 import httpx
 import json
-import requests
 from httpx_sse import aconnect_sse
 import os
 from dotenv import load_dotenv
@@ -8,9 +7,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class CVisionAgent:
+
     AGENT_INTERNAL_TOKEN = os.getenv("AGENT_INTERNAL_TOKEN")
     AGENT_URL = os.getenv("AGENT_URL")
     PARSER_URL = os.getenv("PARSER_URL")
+
     def parse_cv(self, file):
         try:
             response = httpx.post(
@@ -42,11 +43,11 @@ class CVisionAgent:
                         print(f"CHUNK ----- {event.data}")
                         if "metadata" in event.data:
                             continue
-                        if "end" in event.data:
-                            break
                         try:
                             yield json.loads(event.data)
-                        except json.JSONDecodeError:
+                            if "end" in event.data  or "error" in event.data :
+                                break 
+                        except json.JSONDecodeError as e:
                             print(f"EXCEPTION TYPE: {type(e)}")
                             yield {"event": "error", "data": str(e)}
         except Exception as e:
