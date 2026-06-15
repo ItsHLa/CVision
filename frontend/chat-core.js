@@ -93,13 +93,16 @@ export function addMessage(container, content, isUser, { showTime = false } = {}
   return messageDiv;
 }
 
-export function showTypingIndicator(container, text = 'Thinking...') {
+export function showTypingIndicator(container, text = 'Thinking') {
   removeTypingIndicator(container);
   const typingIndicator = container.querySelector('.typing-indicator');
 
   if (typingIndicator) {
     const p = typingIndicator.querySelector('.typing-text');
-    if (p) p.textContent = text;
+    if (p) {
+      const span = p.querySelector('span') || document.createElement('span');
+      p.innerHTML = `${text}<span class="dots"><span></span><span></span><span></span></span>`;
+    }
     container.scrollTop = container.scrollHeight;
     return typingIndicator;
   }
@@ -108,7 +111,7 @@ export function showTypingIndicator(container, text = 'Thinking...') {
   indicatorDiv.className = 'msg bot typing-indicator';
   indicatorDiv.innerHTML = `
     <div class="msg-avatar">${BOT_AVATAR_SVG}</div>
-    <div class="msg-bubble"><p class="typing-text">${text}</p></div>`;
+    <div class="msg-bubble"><p class="typing-text">${text}<span class="dots"><span></span><span></span><span></span></span></p></div>`;
   container.appendChild(indicatorDiv);
   container.scrollTop = container.scrollHeight;
   return indicatorDiv;
@@ -123,7 +126,7 @@ export function updateTypingIndicator(container, text) {
   const existing = container.querySelector('.typing-indicator');
   if (existing) {
     const p = existing.querySelector('.typing-text');
-    if (p) p.textContent = text;
+    if (p) p.innerHTML = `${text}<span class="dots"><span></span><span></span><span></span></span>`;
     container.scrollTop = container.scrollHeight;
     return existing;
   }
