@@ -216,19 +216,26 @@ export class ChatClient {
 
     if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
       this.pendingMessage = { payload };
-      return;
+      return true;
     }
 
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.pendingMessage = { payload };
       addMessage(this.container, 'Connecting to server...', false);
       this.connect();
-      return;
+      return true;
     }
 
     this.streamActive = true;
     showTypingIndicator(this.container, 'Thinking...');
-    this.socket.send(JSON.stringify(payload));
+    try {
+      this.socket.send(JSON.stringify(payload));
+      return true;
+    } catch (e) {
+      this.streamActive = false;
+      removeTypingIndicator(this.container);
+      return false;
+    }
   }
 
   async sendFile(file) {
@@ -290,8 +297,18 @@ export class ChatClient {
   }
 
   _ensureStreamBubble() {
-    if (this.streamBubble) return this.streamBubble;
+    if (this.streamBubble) {
+      if (!this.streamBubble.querySelector('.stream-cursor')) {
+        const cursor = document.createElement('span');
+        cursor.className = 'stream-cursor';
+        this.streamBubble.querySelector('.msg-bubble').appendChild(cursor);
+      }
+      return this.streamBubble;
+    }
     this.streamBubble = addMessage(this.container, '', false);
+    const cursor = document.createElement('span');
+    cursor.className = 'stream-cursor';
+    this.streamBubble.querySelector('.msg-bubble').appendChild(cursor);
     return this.streamBubble;
   }
 
@@ -307,6 +324,10 @@ export class ChatClient {
   }
 
   _finishStream() {
+    if (this.streamBubble) {
+      const cursor = this.streamBubble.querySelector('.stream-cursor');
+      if (cursor) cursor.remove();
+    }
     this.streamBubble = null;
     this.streamText = '';
     this.streamActive = false;

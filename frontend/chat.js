@@ -50,7 +50,9 @@ function sendFromWelcome() {
   if (chatSuggestions) chatSuggestions.remove();
   chatInput.value = text;
   welcomeInput.value = '';
-  client.sendText(text);
+  if (!client.sendText(text)) {
+    welcomeInput.value = text;
+  }
 }
 
 function sendFromBottom() {
@@ -59,7 +61,9 @@ function sendFromBottom() {
   if (chatSuggestions) chatSuggestions.remove();
   chatInput.value = '';
   chatInput.style.height = 'auto';
-  client.sendText(text);
+  if (!client.sendText(text)) {
+    chatInput.value = text;
+  }
 }
 
 const observer = new MutationObserver(() => {
