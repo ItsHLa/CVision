@@ -25,8 +25,15 @@ class CVisionAgent:
         except Exception as e:
             return 400, {"error": str(e)}
 
-    async def invoke(self, payload):
-        try: 
+    async def invoke(self, question, session_id=None):
+        try:
+            payload = {
+                "question": question,
+                "streaming": True,
+                "overrideConfig": {
+                    "sessionId": session_id or f"session_{id(self)}"
+                }
+            }
             headers = {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + self.AGENT_INTERNAL_TOKEN}

@@ -21,7 +21,7 @@ async def chat(websocket : WebSocket):
             if msg_type == 'text':
                 task_id = data.get('session_id')
                 await async_client.xadd(f'task_{task_id}', {'event': 'status', 'data': 'Processing...' })
-                await agent_handler(task_id, {"question": data.get("data"), "streaming": True})
+                await agent_handler(task_id, data.get("data"), task_id)
                 
             if msg_type == 'binary':
                 file_data = data.get('data')

@@ -3,9 +3,9 @@ from services.redis_service import redis_client as redis
 
 agent = CVisionAgent()
 
-async def agent_handler(task_id, payload):
+async def agent_handler(task_id, question, session_id=None):
 
-    async for chunk in agent.invoke(payload):
+    async for chunk in agent.invoke(question, session_id):
         
         redis.xadd(
             f"task_{task_id}",
