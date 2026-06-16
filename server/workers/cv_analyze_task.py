@@ -11,7 +11,7 @@ agent = CVisionAgent()
 
 
 @worker.task(bind=True, name='cv_analyzer')
-def cv_analyzer(self, pdf_base64):
+def cv_analyzer(self, pdf_base64, session_id=None):
     channel = self.request.id
     print(f"Task {channel} started")
 
@@ -32,11 +32,6 @@ def cv_analyzer(self, pdf_base64):
         
     
     question = f"Please Analyze this CV : {json.dumps(data['data'])}"
-    payload = {
-            "question": question,
-            "streaming": True,
-            "overrideConfig": {
-                    "sessionId": "user-session-123"}}
 
     print("STEP 2 : Analyzing")
     redis.xadd(f"task_{channel}", {
@@ -44,6 +39,6 @@ def cv_analyzer(self, pdf_base64):
         "data": "Analyzing..."
     })
     
-    asyncio.run(agent_handler(channel, payload))
+    asyncio.run(agent_handler(channel, question, session_id))
 
     return channel
