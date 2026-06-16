@@ -1,3 +1,4 @@
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from workers.cv_analyze_task import cv_analyzer
 from services.redis_service import async_redis_client as async_client
@@ -17,15 +18,18 @@ async def chat(websocket : WebSocket):
             msg_type = data.get('type')
             task_id = None
             msg_id = '0-0'
+            session_id = data.get('session_id')
+
+            print(f"MSG{msg_type} : {data.get('data')}")
 
             if msg_type == 'text':
-                task_id = data.get('session_id')
+                task_id = f"{session_id}_{time.time()}" if session_id else f"task_{time.time()}"
                 await async_client.xadd(f'task_{task_id}', {'event': 'status', 'data': 'Processing...' })
-                await agent_handler(task_id, data.get("data"), task_id)
+                await agent_handler(task_id, data.get("data"), session_id)
                 
             if msg_type == 'binary':
                 file_data = data.get('data')
-                task = cv_analyzer.delay(file_data)
+                task = cv_analyzer.delay(file_data, session_id)
                 task_id = task.id
                 
 
@@ -49,6 +53,9 @@ async def chat(websocket : WebSocket):
                             break
                     if done:
                         break
+
+            if task_id:
+                await async_client.delete(f'task_{task_id}')
 
     except WebSocketDisconnect as ws :
         print("REASON : ", ws)
