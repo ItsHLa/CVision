@@ -94,17 +94,12 @@ export function addMessage(container, content, isUser, { showTime = false } = {}
 }
 
 export function showTypingIndicator(container, text = 'Thinking') {
-  removeTypingIndicator(container);
-  const typingIndicator = container.querySelector('.typing-indicator');
-
-  if (typingIndicator) {
-    const p = typingIndicator.querySelector('.typing-text');
-    if (p) {
-      const span = p.querySelector('span') || document.createElement('span');
-      p.innerHTML = `${text}<span class="dots"><span></span><span></span><span></span></span>`;
-    }
+  const existing = container.querySelector('.typing-indicator');
+  if (existing) {
+    const p = existing.querySelector('.typing-text');
+    if (p) p.innerHTML = `${text}<span class="dots"><span></span><span></span><span></span></span>`;
     container.scrollTop = container.scrollHeight;
-    return typingIndicator;
+    return existing;
   }
 
   const indicatorDiv = document.createElement('div');
@@ -123,13 +118,6 @@ export function removeTypingIndicator(container) {
 }
 
 export function updateTypingIndicator(container, text) {
-  const existing = container.querySelector('.typing-indicator');
-  if (existing) {
-    const p = existing.querySelector('.typing-text');
-    if (p) p.innerHTML = `${text}<span class="dots"><span></span><span></span><span></span></span>`;
-    container.scrollTop = container.scrollHeight;
-    return existing;
-  }
   return showTypingIndicator(container, text);
 }
 
@@ -227,13 +215,12 @@ export class ChatClient {
     }
 
     this.streamActive = true;
-    showTypingIndicator(this.container, 'Thinking...');
     try {
       this.socket.send(JSON.stringify(payload));
       return true;
     } catch (e) {
       this.streamActive = false;
-      removeTypingIndicator(this.container);
+      this._finishStream();
       return false;
     }
   }
@@ -269,9 +256,68 @@ export class ChatClient {
       return;
     }
 
-    showTypingIndicator(this.container, 'Uploading and starting analysis...');
     this.streamActive = true;
+    this._ensureStreamBubble();
     this.socket.send(JSON.stringify(payload));
+  }
+
+  // Send pre-converted base64 (used by chip-based file UX)
+  sendBinary(base64, message = '', filename = '') {
+    if (this.streamActive) this._finishStream();
+
+    // Build file attachment bubble with icon
+    const fileBubble = document.createElement('div');
+    fileBubble.className = 'msg user';
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'msg-avatar';
+    avatarDiv.innerHTML = USER_AVATAR_SVG;
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'msg-bubble';
+    const ext = filename.split('.').pop().toLowerCase();
+    const fileIcon = ext === 'pdf'
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
+      : ext === 'docx'
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+    let innerHtml = `<div class="file-attachment">${fileIcon}<span class="file-name">${filename}</span></div>`;
+    if (message) {
+      innerHtml += `<span class="file-message-text">${message}</span>`;
+    }
+    let timeHtml = '';
+    if (this.showTimestamps) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      timeHtml = `<span class="msg-time">${time}</span>`;
+    }
+    bubbleDiv.innerHTML = innerHtml + timeHtml;
+    fileBubble.appendChild(avatarDiv);
+    fileBubble.appendChild(bubbleDiv);
+    this.container.appendChild(fileBubble);
+    this.container.scrollTop = this.container.scrollHeight;
+
+    const payload = { type: 'binary', data: base64, message, session_id: this.sessionId };
+
+    if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
+      this.pendingMessage = { payload };
+      return true;
+    }
+
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this.pendingMessage = { payload };
+      addMessage(this.container, 'Connecting to server...', false);
+      this.connect();
+      return true;
+    }
+
+    this.streamActive = true;
+    this._ensureStreamBubble();
+    try {
+      this.socket.send(JSON.stringify(payload));
+      return true;
+    } catch (e) {
+      this.streamActive = false;
+      this._finishStream();
+      return false;
+    }
   }
 
   destroy() {
@@ -291,24 +337,15 @@ export class ChatClient {
     if (!this.pendingMessage || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     const msg = this.pendingMessage;
     this.pendingMessage = null;
-    showTypingIndicator(this.container, 'Thinking...');
     this.streamActive = true;
     this.socket.send(JSON.stringify(msg.payload));
   }
 
   _ensureStreamBubble() {
-    if (this.streamBubble) {
-      if (!this.streamBubble.querySelector('.stream-cursor')) {
-        const cursor = document.createElement('span');
-        cursor.className = 'stream-cursor';
-        this.streamBubble.querySelector('.msg-bubble').appendChild(cursor);
-      }
-      return this.streamBubble;
-    }
+    if (this.streamBubble) return this.streamBubble;
     this.streamBubble = addMessage(this.container, '', false);
-    const cursor = document.createElement('span');
-    cursor.className = 'stream-cursor';
-    this.streamBubble.querySelector('.msg-bubble').appendChild(cursor);
+    const p = this.streamBubble.querySelector('.msg-bubble p');
+    if (p) p.classList.add('streaming');
     return this.streamBubble;
   }
 
@@ -325,8 +362,8 @@ export class ChatClient {
 
   _finishStream() {
     if (this.streamBubble) {
-      const cursor = this.streamBubble.querySelector('.stream-cursor');
-      if (cursor) cursor.remove();
+      const p = this.streamBubble.querySelector('.msg-bubble p');
+      if (p) p.classList.remove('streaming');
     }
     this.streamBubble = null;
     this.streamText = '';
