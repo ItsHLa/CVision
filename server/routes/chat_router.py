@@ -1,5 +1,8 @@
 import asyncio
+import logging
 import time
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from workers.cv_analyze_task import cv_analyzer
 from services.redis_service import async_redis_client as async_client
@@ -21,7 +24,7 @@ async def chat(websocket : WebSocket):
             msg_id = '0-0'
             session_id = data.get('session_id')
 
-            print(f"MSG {msg_type} : {data.get('data')}")
+            logger.debug(f"MSG {msg_type} : {data.get('data')}")
 
             if msg_type == 'text':
                 task_id = f"{session_id}_{time.time()}" if session_id else f"task_{time.time()}"
@@ -37,13 +40,21 @@ async def chat(websocket : WebSocket):
                 continue
 
             done = False
+            poll_timeout = 60  # max seconds to wait for task completion
+            deadline = asyncio.get_event_loop().time() + poll_timeout
             while not done:
+                # Use non-blocking xread (block=0) to avoid Upstash connection timeouts
                 events = await async_client.xread(
                     {f'task_{task_id}': msg_id},
-                    block=5000,
+                    block=0,
                     count=10)
 
                 if not events:
+                    if asyncio.get_event_loop().time() > deadline:
+                        await websocket.send_json({'event': 'error', 'data': 'Task timed out'})
+                        done = True
+                    else:
+                        await asyncio.sleep(0.3)  # short poll interval
                     continue
 
                 for _, event in events:
@@ -59,4 +70,10 @@ async def chat(websocket : WebSocket):
             await async_client.delete(f'task_{task_id}')
 
     except WebSocketDisconnect as ws:
-        print("REASON : ", ws)
+        logger.debug("WebSocket disconnected: %s", ws)
+    except Exception as e:
+        logger.exception("Unexpected error in chat WebSocket: %s", e)
+        try:
+            await websocket.send_json({'event': 'error', 'data': 'Cannot connect to server'})
+        except Exception:
+            pass  # socket may already be closed
