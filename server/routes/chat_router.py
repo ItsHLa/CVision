@@ -7,6 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from workers.cv_analyze_task import cv_analyzer
 from services.redis_service import async_redis_client as async_client
 from services.agent_handler import agent_handler
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 router = APIRouter(
     prefix = '/ws/v1',
@@ -28,7 +29,10 @@ async def chat(websocket : WebSocket):
 
             if msg_type == 'text':
                 task_id = f"{session_id}_{time.time()}" if session_id else f"task_{time.time()}"
-                await async_client.xadd(f'task_{task_id}', {'event': 'status', 'data': 'Processing...' })
+                try:
+                    await async_client.xadd(f'task_{task_id}', {'event': 'status', 'data': 'Processing...' })
+                except RedisConnectionError:
+                    await async_client.xadd(f'task_{task_id}', {'event': 'status', 'data': 'Processing...' })
                 asyncio.create_task(agent_handler(task_id, data.get("data"), session_id))
 
             elif msg_type == 'binary':
@@ -40,21 +44,23 @@ async def chat(websocket : WebSocket):
                 continue
 
             done = False
-            poll_timeout = 60  # max seconds to wait for task completion
+            poll_timeout = 60
             deadline = asyncio.get_event_loop().time() + poll_timeout
             while not done:
-                # Use non-blocking xread (block=0) to avoid Upstash connection timeouts
-                events = await async_client.xread(
-                    {f'task_{task_id}': msg_id},
-                    block=0,
-                    count=10)
+                try:
+                    events = await async_client.xread(
+                        {f'task_{task_id}': msg_id},
+                        block=3000,
+                        count=10)
+                except RedisConnectionError:
+                    continue
 
                 if not events:
                     if asyncio.get_event_loop().time() > deadline:
                         await websocket.send_json({'event': 'error', 'data': 'Task timed out'})
                         done = True
                     else:
-                        await asyncio.sleep(0.3)  # short poll interval
+                        await asyncio.sleep(0.3)
                     continue
 
                 for _, event in events:
@@ -67,7 +73,10 @@ async def chat(websocket : WebSocket):
                     if done:
                         break
 
-            await async_client.delete(f'task_{task_id}')
+            try:
+                await async_client.delete(f'task_{task_id}')
+            except RedisConnectionError:
+                pass
 
     except WebSocketDisconnect as ws:
         logger.debug("WebSocket disconnected: %s", ws)
@@ -76,4 +85,4 @@ async def chat(websocket : WebSocket):
         try:
             await websocket.send_json({'event': 'error', 'data': 'Cannot connect to server'})
         except Exception:
-            pass  # socket may already be closed
+            pass
