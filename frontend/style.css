@@ -372,6 +372,7 @@
     flex-direction: row-reverse;
 }
 .msg-bubble {
+    font-family: inherit;
     max-width: min(100%, 420px);
     padding: 0.9rem 1rem;
     border-radius: 18px;
