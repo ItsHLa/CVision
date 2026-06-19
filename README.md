@@ -2,6 +2,20 @@
 
 CVision is an AI-powered CV and career analysis platform. Users upload a resume, paste a job description, or ask career questions through a chat interface — and receive real-time streaming feedback. No sign-up required.
 
+## Live Demo
+
+- **Landing page:** [https://cvision-llpy.onrender.com](https://cvision-llpy.onrender.com)
+- **Chat interface:** [https://cvision-llpy.onrender.com/chat.html](https://cvision-llpy.onrender.com/chat.html)
+
+## Features
+
+- **AI-Powered CV Analysis** — Upload your resume and a job description to get a detailed match score, skill gap analysis, and actionable recommendations
+- **Real-Time Chat** — Stream responses token by token over WebSocket for a fluid conversational experience
+- **Document Parsing** — Supports PDF and DOCX uploads with automatic text extraction
+- **No Sign-Up Required** — Start analyzing immediately with zero friction
+- **Privacy-First** — All documents processed securely; no account or data retention required
+- **ATS Keyword Detection** — Identifies missing keywords that could hurt your application in applicant tracking systems
+
 ## Key Components
 
 ### Orchestrator Agent Pipeline
@@ -38,3 +52,24 @@ Uses Upstash (serverless Redis) with sync Redis for writing and async Redis for 
 - **Message broker:** Redis Streams (Upstash)
 - **Background workers:** Celery (Redis broker)
 - **External AI:** Flowise (LLM), n8n (document parsing)
+
+## Getting Started
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/CVision.git
+cd CVision
+
+# Install server dependencies
+cd server
+pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys and Redis credentials
+
+# Start the server
+uvicorn main:app --reload
+```
+
+Then open `http://localhost:8000` in your browser, or serve the `frontend/` directory with any static file server.
