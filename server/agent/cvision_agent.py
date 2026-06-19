@@ -50,7 +50,7 @@ class CVisionAgent:
                 ) as event_source:
                     async for event in event_source.aiter_sse():
                         print(f"CHUNK ----- {event.data}")
-                        if "metadata" in event.data:
+                        if "metadata" in event.data or "usedTools" in event.data:
                             continue
                         try:
                             chunk = json.loads(event.data)
