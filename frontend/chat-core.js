@@ -50,6 +50,57 @@ export function fileToBase64(file) {
 const BOT_AVATAR_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" /></svg>`;
 const USER_AVATAR_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>`;
 
+function escapeHtml(str) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return str.replace(/[&<>"']/g, c => map[c]);
+}
+
+function mdToHtml(text) {
+  let html = escapeHtml(text);
+
+  // code block (must be before inline code)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+
+  // horizontal rules
+  html = html.replace(/^ {0,3}([-*_]){3,}\s*$/gm, '<hr>');
+
+  // headings
+  html = html.replace(/^ {0,3}(#{1,6})\s+(.+)$/gm, (_, hashes, content) => `<h${hashes.length}>${content}</h${hashes.length}>`);
+
+  // blockquotes
+  html = html.replace(/^ {0,3}>\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+
+  // unordered list
+  html = html.replace(/^ {0,3}[-*+]\s+(.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+  // ordered list
+  html = html.replace(/^ {0,3}\d+\.\s+(.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, match => match.startsWith('<ul>') ? match : '<ol>' + match + '</ol>');
+
+  // bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/(?<!<[^>]*?)__(.+?)__(?!<[^>]*?)/g, '<strong>$1</strong>');
+
+  // italic
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
+
+  // inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+
+  // line breaks (double newline = paragraph)
+  html = html.replace(/\n\n+/g, '</p><p>');
+
+  // single newline = <br>
+  html = html.replace(/\n/g, '<br>');
+
+  return `<p>${html}</p>`;
+}
+
 export function addMessage(container, content, isUser, { showTime = false } = {}) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `msg ${isUser ? 'user' : 'bot'}`;
@@ -67,8 +118,19 @@ export function addMessage(container, content, isUser, { showTime = false } = {}
     timeHtml = `<span class="msg-time">${time}</span>`;
   }
 
-  bubbleDiv.innerHTML = `<p></p>${timeHtml}`;
-  bubbleDiv.querySelector('p').textContent = content;
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'msg-content';
+  if (isUser) {
+    contentDiv.innerHTML = `<p></p>`;
+    contentDiv.querySelector('p').textContent = content;
+  } else {
+    contentDiv.innerHTML = mdToHtml(content);
+  }
+  bubbleDiv.appendChild(contentDiv);
+
+  if (timeHtml) {
+    bubbleDiv.insertAdjacentHTML('beforeend', timeHtml);
+  }
 
   if (!isUser) {
     const copyBtn = document.createElement('button');
@@ -76,7 +138,7 @@ export function addMessage(container, content, isUser, { showTime = false } = {}
     copyBtn.setAttribute('aria-label', 'Copy to clipboard');
     copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
     copyBtn.onclick = () => {
-      const textToCopy = bubbleDiv.querySelector('p').textContent;
+      const textToCopy = bubbleDiv.textContent;
       navigator.clipboard.writeText(textToCopy).then(() => {
         const originalHTML = copyBtn.innerHTML;
         copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
@@ -344,8 +406,11 @@ export class ChatClient {
   _ensureStreamBubble() {
     if (this.streamBubble) return this.streamBubble;
     this.streamBubble = addMessage(this.container, '', false);
-    const p = this.streamBubble.querySelector('.msg-bubble p');
-    if (p) p.classList.add('streaming');
+    const content = this.streamBubble.querySelector('.msg-bubble .msg-content');
+    if (content) {
+      const p = content.querySelector('p:last-child');
+      if (p) p.classList.add('streaming');
+    }
     return this.streamBubble;
   }
 
@@ -353,17 +418,19 @@ export class ChatClient {
     removeTypingIndicator(this.container);
     this.streamActive = true;
     const bubble = this._ensureStreamBubble();
-    const textNode = bubble && bubble.querySelector('.msg-bubble p');
-    if (!textNode) return;
+    const content = bubble && bubble.querySelector('.msg-bubble .msg-content');
+    if (!content) return;
     this.streamText += token;
-    textNode.textContent = this.streamText;
+    content.innerHTML = mdToHtml(this.streamText);
+    const streamingP = content.querySelector('p:last-child');
+    if (streamingP) streamingP.classList.add('streaming');
     this.container.scrollTop = this.container.scrollHeight;
   }
 
   _finishStream() {
     if (this.streamBubble) {
-      const p = this.streamBubble.querySelector('.msg-bubble p');
-      if (p) p.classList.remove('streaming');
+      const streaming = this.streamBubble.querySelector('.msg-content .streaming');
+      if (streaming) streaming.classList.remove('streaming');
     }
     this.streamBubble = null;
     this.streamText = '';
@@ -408,7 +475,7 @@ export class ChatClient {
         return;
       case 'error':
         this._finishStream();
-        addMessage(this.container, message || 'Something went wrong.', false);
+        addMessage(this.container, 'Cannot connect to server, please try again.', false);
         this.onError(message);
         return;
       default:
