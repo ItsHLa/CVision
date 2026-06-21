@@ -39,11 +39,14 @@
         body {
             display: flex;
             flex-direction: column;
-            height: 100dvh;
+            height: 100vh;
+            min-height: 100vh;
             overflow: hidden;
             background: var(--bg);
             color: var(--text);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
         }
 
         /* ── Navbar ── */
@@ -148,11 +151,12 @@
 
         /* ── Main Container ── */
         .main-chat-container {
-            flex: 1;
+            flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
             width: 100%;
+            min-height: 0;
             position: relative;
             overflow: hidden;
             background:
@@ -178,10 +182,11 @@
 
         /* ── Messages Area ── */
         .chat-scroll-area {
-            flex: 1;
+            flex: 1 1 auto;
             width: 100%;
             max-width: 768px;
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 2rem 1.5rem 0.75rem;
             display: flex;
             flex-direction: column;
@@ -189,6 +194,7 @@
             position: relative;
             z-index: 1;
             scroll-behavior: smooth;
+            min-height: 0;
         }
 
         .chat-scroll-area::-webkit-scrollbar {
@@ -210,7 +216,7 @@
 
         /* ── Welcome Screen ── */
         .welcome-screen {
-            flex: 1;
+            flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -219,6 +225,8 @@
             padding: 2rem;
             animation: fadeUp 0.5s ease both;
             gap: 1.5rem;
+            min-height: 0;
+            width: 100%;
         }
 
         .welcome-screen h1 {
@@ -776,6 +784,7 @@
             position: relative;
             z-index: 10;
             flex-shrink: 0;
+            flex-grow: 0;
         }
 
         .chat-input-area {

@@ -57,23 +57,24 @@ class CVisionAgent:
                     async for event in event_source.aiter_sse():
                         try:
                             chunk = json.loads(event.data)
-
-                            if "metadata" in chunk or "usedTools" in chunk:
-                                continue
-
-                            event_type = chunk.get("event")
-                            data = chunk.get("data")
-                            if not isinstance(data, str):
-                                data = json.dumps(data)
-                            await r.xadd(
-                                    f"task_{task_id}",
-                                    {"event": event_type, "data": data})
-
-                            if event_type in ("end", "error"):
-                                break
                         except json.JSONDecodeError as e:
                             logger.warning("JSON decode error in SSE stream: %s", e)
-                            await r.xadd(f"task_{task_id}", {"event": "error", "data": str(e)})
+                            continue
+
+                        event_type = chunk.get("event")
+
+                        if event_type not in ("token", "error", "start", "end"):
+                            continue
+
+                        data = chunk.get("data")
+                        if not isinstance(data, str):
+                            data = json.dumps(data)
+                        await r.xadd(
+                            f"task_{task_id}",
+                            {"event": event_type, "data": data})
+
+                        if event_type in ("end", "error"):
+                            break
         except Exception as e:
             logger.exception("Agent invoke failed: %s", e)
             await r.xadd(f"task_{task_id}", {"event": "error", "data": str(e)})
